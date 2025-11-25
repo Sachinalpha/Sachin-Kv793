@@ -1,17 +1,20 @@
-name: Terraform + KeyVault Automation
+name: Terraform + KeyVault Config
 
 on:
   workflow_dispatch:
     inputs:
       rg_name:
-        description: "Resource Group Name"
+        description: 'Resource Group Name'
         required: true
+        default: 'rg-demo'
       kv_name:
-        description: "Key Vault Name"
+        description: 'Key Vault Name'
         required: true
+        default: 'kv-demo'
       location:
-        description: "Azure Region"
+        description: 'Azure Location'
         required: true
+        default: 'eastus'
 
 jobs:
   terraform:
@@ -20,8 +23,9 @@ jobs:
       rg: ${{ steps.out.outputs.rg }}
       kv: ${{ steps.out.outputs.kv }}
       loc: ${{ steps.out.outputs.loc }}
+
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v3
 
       - name: Setup Terraform
@@ -36,33 +40,41 @@ jobs:
           ARM_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
           ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
           ARM_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
-        run: terraform apply -auto-approve \
-          -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
-          -var="location=${{ github.event.inputs.location }}" \
-          -var="key_vault_name=${{ github.event.inputs.kv_name }}"
+        run: |
+          terraform apply -auto-approve \
+            -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
+            -var="location=${{ github.event.inputs.location }}" \
+            -var="key_vault_name=${{ github.event.inputs.kv_name }}" \
+            -var="tenant_id=${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}"
 
       - name: Capture Outputs
         id: out
         run: |
           echo "rg=$(terraform output -raw rg_name)" >> $GITHUB_OUTPUT
           echo "kv=$(terraform output -raw kv_name)" >> $GITHUB_OUTPUT
-          echo "loc=$(terraform output -raw loc)" >> $GITHUB_OUTPUT
+          echo "loc=$(terraform output -raw location)" >> $GITHUB_OUTPUT
 
-  configure_keyvault:
+  powershell:
     needs: terraform
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v3
 
+      - name: Setup PowerShell
+        uses: actions/setup-powershell@v2
+
       - name: Run PowerShell Script
+        shell: pwsh
         env:
           AZURE_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
           AZURE_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
           AZURE_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
           AZURE_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
-        shell: pwsh
-        run: pwsh -File Configure-KeyVault.ps1 -ResourceGroupName "${{ needs.terraform.outputs.rg }}" -KeyVaultName "${{ needs.terraform.outputs.kv }}" -Location "${{ needs.terraform.outputs.loc }}" -ServicePrincipalName "kv-migration-sp" -VNetName "vnet-demo" -SubnetName "snet-pe"
-
-
-
+        run: pwsh -File Configure-KeyVault.ps1 `
+              -ResourceGroupName "${{ needs.terraform.outputs.rg }}" `
+              -KeyVaultName "${{ needs.terraform.outputs.kv }}" `
+              -Location "${{ needs.terraform.outputs.loc }}" `
+              -ServicePrincipalName "kv-migration-sp" `
+              -VNetName "vnet-demo" `
+              -SubnetName "snet-pe"

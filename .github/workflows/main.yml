@@ -1,29 +1,24 @@
-name: Azure Terraform & KeyVault
+name: Terraform Deploy RG + KeyVault
 
 on:
   workflow_dispatch:
     inputs:
       rg_name:
-        description: "Resource Group Name"
+        description: 'Resource Group Name'
         required: true
       kv_name:
-        description: "Key Vault Name"
+        description: 'Key Vault Name'
         required: true
       location:
-        description: "Azure Location"
+        description: 'Azure Location'
         required: true
 
 jobs:
-  terraform:
+  deploy:
     runs-on: ubuntu-latest
-    outputs:
-      rg: ${{ steps.capture.outputs.rg }}
-      kv: ${{ steps.capture.outputs.kv }}
-      loc: ${{ steps.capture.outputs.loc }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -35,43 +30,11 @@ jobs:
         env:
           ARM_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).appId }}
           ARM_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).password }}
-          ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
           ARM_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenant }}
+          ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
         run: terraform apply -auto-approve \
           -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
           -var="key_vault_name=${{ github.event.inputs.kv_name }}" \
-          -var="location=${{ github.event.inputs.location }}" \
-          -var="client_id=$ARM_CLIENT_ID" \
-          -var="client_secret=$ARM_CLIENT_SECRET" \
-          -var="tenant_id=$ARM_TENANT_ID" \
-          -var="subscription_id=$ARM_SUBSCRIPTION_ID"
+          -var="location=${{ github.event.inputs.location }}"
 
-      - name: Capture Outputs
-        id: capture
-        run: |
-          echo "rg=$(terraform output -raw rg_name)" >> $GITHUB_OUTPUT
-          echo "kv=$(terraform output -raw kv_name)" >> $GITHUB_OUTPUT
-          echo "loc=$(terraform output -raw location)" >> $GITHUB_OUTPUT
-
-  configure-keyvault:
-    needs: terraform
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Run PowerShell Script
-        shell: pwsh
-        env:
-          AZURE_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).appId }}
-          AZURE_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).password }}
-          AZURE_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenant }}
-          AZURE_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
-        run: pwsh -File Configure-KeyVault.ps1 \
-          -ResourceGroupName "${{ needs.terraform.outputs.rg }}" \
-          -KeyVaultName "${{ needs.terraform.outputs.kv }}" \
-          -Location "${{ needs.terraform.outputs.loc }}" \
-          -ServicePrincipalName "kv-migration-sp" \
-          -VNetName "vnet-demo" \
-          -SubnetName "snet-pe"
 

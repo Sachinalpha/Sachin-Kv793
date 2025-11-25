@@ -1,0 +1,79 @@
+name: deploy-keyvault
+
+on:
+  workflow_dispatch:
+    inputs:
+      rg_name:
+        description: "Resource Group Name"
+        required: true
+      kv_name:
+        description: "Key Vault Name"
+        required: true
+      location:
+        description: "Azure Location"
+        required: true
+        default: "eastus"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    outputs:
+      rg: ${{ steps.out.outputs.rg }}
+      kv: ${{ steps.out.outputs.kv }}
+      loc: ${{ steps.out.outputs.loc }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Apply
+      run: |
+        terraform apply -auto-approve \
+          -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
+          -var="location=${{ github.event.inputs.location }}" \
+          -var="key_vault_name=${{ github.event.inputs.kv_name }}"
+
+    - name: Capture Outputs
+      id: out
+      run: |
+        echo "rg=$(terraform output -raw rg_name)" >> $GITHUB_OUTPUT
+        echo "kv=$(terraform output -raw kv_name)" >> $GITHUB_OUTPUT
+        echo "loc=$(terraform output -raw location)" >> $GITHUB_OUTPUT
+
+  powershell:
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Install Az Module
+      run: pwsh -c "Install-Module Az -Force -Scope CurrentUser"
+
+    - name: Run PowerShell Script
+      run: |
+        pwsh Configure-KeyVault.ps1 `
+          -ResourceGroupName "${{ needs.terraform.outputs.rg }}" `
+          -KeyVaultName "${{ needs.terraform.outputs.kv }}" `
+          -Location "${{ needs.terraform.outputs.loc }}" `
+          -ServicePrincipalName "kv-migration-sp" `
+          -VNetName "vnet-demo" `
+          -SubnetName "snet-pe"

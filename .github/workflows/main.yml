@@ -32,9 +32,6 @@ jobs:
           ARM_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).password }}
           ARM_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenant }}
           ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
-        run: terraform apply -auto-approve \
-          -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
-          -var="key_vault_name=${{ github.event.inputs.kv_name }}" \
-          -var="location=${{ github.event.inputs.location }}"
+        run: terraform apply -auto-approve -var "resource_group_name=${{ github.event.inputs.rg_name }}" -var "key_vault_name=${{ github.event.inputs.kv_name }}" -var "location=${{ github.event.inputs.location }}"
 
 

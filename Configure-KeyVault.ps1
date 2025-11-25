@@ -1,3 +1,12 @@
+# Login using Service Principal
+Connect-AzAccount `
+    -ServicePrincipal `
+    -Tenant $env:AZURE_TENANT_ID `
+    -ApplicationId $env:AZURE_CLIENT_ID `
+    -Credential (New-Object System.Management.Automation.PSCredential($env:AZURE_CLIENT_ID, (ConvertTo-SecureString $env:AZURE_CLIENT_SECRET -AsPlainText -Force)))
+
+# Set the subscription context
+Set-AzContext -Subscription $env:AZURE_SUBSCRIPTION_ID
 param(
     [string]$ResourceGroupName,
     [string]$KeyVaultName,

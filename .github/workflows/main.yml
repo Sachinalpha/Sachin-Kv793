@@ -79,6 +79,12 @@ jobs:
       run: pwsh -c "Install-Module Az -Force -Scope CurrentUser"
 
     - name: Run PowerShell Script
+      env:
+        AZURE_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
+        AZURE_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
+        AZURE_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
+        AZURE_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
+
       shell: pwsh
       run: pwsh -File Configure-KeyVault.ps1 -ResourceGroupName "${{ needs.terraform.outputs.rg }}" -KeyVaultName "${{ needs.terraform.outputs.kv }}" -Location "${{ needs.terraform.outputs.loc }}" -ServicePrincipalName "kv-migration-sp" -VNetName "vnet-demo" -SubnetName "snet-pe"
 

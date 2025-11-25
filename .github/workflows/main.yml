@@ -79,11 +79,6 @@ jobs:
       run: pwsh -c "Install-Module Az -Force -Scope CurrentUser"
 
     - name: Run PowerShell Script
-      run: |
-        pwsh Configure-KeyVault.ps1 `
-          -ResourceGroupName "${{ needs.terraform.outputs.rg }}" `
-          -KeyVaultName "${{ needs.terraform.outputs.kv }}" `
-          -Location "${{ needs.terraform.outputs.loc }}" `
-          -ServicePrincipalName "kv-migration-sp" `
-          -VNetName "vnet-demo" `
-          -SubnetName "snet-pe"
+      shell: pwsh
+      run: pwsh -File Configure-KeyVault.ps1 -ResourceGroupName "${{ needs.terraform.outputs.rg }}" -KeyVaultName "${{ needs.terraform.outputs.kv }}" -Location "${{ needs.terraform.outputs.loc }}" -ServicePrincipalName "kv-migration-sp" -VNetName "vnet-demo" -SubnetName "snet-pe"
+

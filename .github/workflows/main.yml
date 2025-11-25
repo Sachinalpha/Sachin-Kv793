@@ -1,31 +1,28 @@
-name: Terraform + KeyVault Config
+name: Azure Terraform & KeyVault
 
 on:
   workflow_dispatch:
     inputs:
       rg_name:
-        description: 'Resource Group Name'
+        description: "Resource Group Name"
         required: true
-        default: 'rg-demo'
       kv_name:
-        description: 'Key Vault Name'
+        description: "Key Vault Name"
         required: true
-        default: 'kv-demo'
       location:
-        description: 'Azure Location'
+        description: "Azure Location"
         required: true
-        default: 'eastus'
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
     outputs:
-      rg: ${{ steps.out.outputs.rg }}
-      kv: ${{ steps.out.outputs.kv }}
-      loc: ${{ steps.out.outputs.loc }}
+      rg: ${{ steps.capture.outputs.rg }}
+      kv: ${{ steps.capture.outputs.kv }}
+      loc: ${{ steps.capture.outputs.loc }}
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Setup Terraform
@@ -36,45 +33,45 @@ jobs:
 
       - name: Terraform Apply
         env:
-          ARM_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
-          ARM_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
-          ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
-          ARM_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
-        run: |
-          terraform apply -auto-approve \
-            -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
-            -var="location=${{ github.event.inputs.location }}" \
-            -var="key_vault_name=${{ github.event.inputs.kv_name }}" \
-            -var="tenant_id=${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}"
+          ARM_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).appId }}
+          ARM_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).password }}
+          ARM_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
+          ARM_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenant }}
+        run: terraform apply -auto-approve \
+          -var="resource_group_name=${{ github.event.inputs.rg_name }}" \
+          -var="key_vault_name=${{ github.event.inputs.kv_name }}" \
+          -var="location=${{ github.event.inputs.location }}" \
+          -var="client_id=$ARM_CLIENT_ID" \
+          -var="client_secret=$ARM_CLIENT_SECRET" \
+          -var="tenant_id=$ARM_TENANT_ID" \
+          -var="subscription_id=$ARM_SUBSCRIPTION_ID"
 
       - name: Capture Outputs
-        id: out
+        id: capture
         run: |
           echo "rg=$(terraform output -raw rg_name)" >> $GITHUB_OUTPUT
           echo "kv=$(terraform output -raw kv_name)" >> $GITHUB_OUTPUT
           echo "loc=$(terraform output -raw location)" >> $GITHUB_OUTPUT
 
-  powershell:
+  configure-keyvault:
     needs: terraform
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repo
+      - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Setup PowerShell
-        uses: actions/setup-powershell@v2
 
       - name: Run PowerShell Script
         shell: pwsh
         env:
-          AZURE_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
-          AZURE_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
-          AZURE_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
-          AZURE_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
-        run: pwsh -File Configure-KeyVault.ps1 `
-              -ResourceGroupName "${{ needs.terraform.outputs.rg }}" `
-              -KeyVaultName "${{ needs.terraform.outputs.kv }}" `
-              -Location "${{ needs.terraform.outputs.loc }}" `
-              -ServicePrincipalName "kv-migration-sp" `
-              -VNetName "vnet-demo" `
-              -SubnetName "snet-pe"
+          AZURE_CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).appId }}
+          AZURE_CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).password }}
+          AZURE_TENANT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenant }}
+          AZURE_SUBSCRIPTION_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).Subscriptionid }}
+        run: pwsh -File Configure-KeyVault.ps1 \
+          -ResourceGroupName "${{ needs.terraform.outputs.rg }}" \
+          -KeyVaultName "${{ needs.terraform.outputs.kv }}" \
+          -Location "${{ needs.terraform.outputs.loc }}" \
+          -ServicePrincipalName "kv-migration-sp" \
+          -VNetName "vnet-demo" \
+          -SubnetName "snet-pe"
+

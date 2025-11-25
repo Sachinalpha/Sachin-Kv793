@@ -7,7 +7,7 @@ param(
     [string]$SubnetName
 )
 
-# Login with Service Principal
+# Login to Azure using Service Principal
 Connect-AzAccount `
     -ServicePrincipal `
     -Tenant $env:AZURE_TENANT_ID `
@@ -16,19 +16,19 @@ Connect-AzAccount `
 
 Set-AzContext -Subscription $env:AZURE_SUBSCRIPTION_ID
 
-# Resource Group
+# Check or create Resource Group
 $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
 if (-not $rg) { New-AzResourceGroup -Name $ResourceGroupName -Location $Location }
 
-# Key Vault
+# Check or create Key Vault
 $kv = Get-AzKeyVault -VaultName $KeyVaultName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
 if (-not $kv) { $kv = New-AzKeyVault -Name $KeyVaultName -ResourceGroupName $ResourceGroupName -Location $Location -Sku Standard }
 
-# Tags
+# Apply tags
 $desiredTags = @{ Environment="Production"; ManagedBy="Automation" }
 Set-AzResource -ResourceId $kv.ResourceId -Tag $desiredTags -Force
 
-# Access Policy
+# Apply access policy
 $sp = Get-AzADServicePrincipal -DisplayName $ServicePrincipalName
 $exists = $kv.AccessPolicies | Where-Object { $_.ObjectId -eq $sp.Id }
 if (-not $exists) {
@@ -38,7 +38,7 @@ if (-not $exists) {
         -PermissionsToCertificates get,list,create,import,delete
 }
 
-# Key Rotation Policy
+# Apply rotation policy
 $rp = Get-AzKeyVaultKeyRotationPolicy -VaultName $KeyVaultName -ErrorAction SilentlyContinue
 if (-not $rp) {
 $rotationPolicyJson = @"
@@ -52,13 +52,14 @@ $rotationPolicyJson = @"
     Set-AzKeyVaultKeyRotationPolicy -VaultName $KeyVaultName -InputObject $rotationPolicyJson
 }
 
-# Virtual Network and Subnet
+# Check or create VNet
 $vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue
 if (-not $vnet) {
     $subnetConfig = New-AzVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix "10.0.1.0/24"
     $vnet = New-AzVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix "10.0.0.0/16" -Subnet $subnetConfig
 }
 
+# Check or create Subnet
 $subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetName -VirtualNetwork $vnet -ErrorAction SilentlyContinue
 if (-not $subnet) {
     Add-AzVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix "10.0.1.0/24" -VirtualNetwork $vnet | Set-AzVirtualNetwork
@@ -66,7 +67,7 @@ if (-not $subnet) {
     $subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetName -VirtualNetwork $vnet
 }
 
-# Private Endpoint
+# Check or create Private Endpoint
 $pe = Get-AzPrivateEndpoint -ResourceGroupName $ResourceGroupName -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "$KeyVaultName-pe" }
 if (-not $pe) {
     New-AzPrivateEndpoint -Name "$KeyVaultName-pe" -ResourceGroupName $ResourceGroupName -Location $Location -Subnet $subnet `

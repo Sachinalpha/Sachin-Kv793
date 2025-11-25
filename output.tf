@@ -6,6 +6,6 @@ output "kv_name" {
   value = azurerm_key_vault.kv.name
 }
 
-output "loc" {
+output "location" {
   value = azurerm_resource_group.rg.location
 }
